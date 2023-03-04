@@ -1,7 +1,15 @@
 ﻿// A surface tessellation shader using the Walton & Meek technique [1].
 //
+// This is just a surface shader, so you can add any surface shader features you want by simply
+// tweaking the `#pragma surface` line. See the Unity documentation [2] for more information.
+//
+// Copyright (c) 2023 Tachi. Licensed under either the Apache 2.0 license or MIT license, at your
+// option.
+//
 // [1]: DJ Walton and DS Meek. "A triangular G1 patch from boundary curves." *Computer-Aided Design*
 // 28, no. 2 (1996): 113-123.
+//
+// [2]: https://docs.unity3d.com/Manual/SL-SurfaceShaders.html
 
 Shader "Tachi/Tess" {
     // *INDENT-OFF*
@@ -24,6 +32,10 @@ Shader "Tachi/Tess" {
         CGPROGRAM
 
 // Physically based Standard lighting model, and enable shadows on all light types.
+//
+// See the Unity documentation [2] for more things you can put here.
+//
+// [2]: https://docs.unity3d.com/Manual/SL-SurfaceShaders.html
 #pragma surface mainSurface Standard fullforwardshadows tessellate:mainTessControl vertex:fakeVert
 
 // Use shader model 4.6 target for tessellation.
