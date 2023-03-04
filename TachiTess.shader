@@ -16,6 +16,7 @@ Shader "Tachi/Tess" {
     Properties {
         _Color("Color", Color) = (1, 1, 1, 1)
         _MainTex("Albedo (RGB)", 2D) = "white" {}
+        _NormalMap("Normal Map", 2D) = "bump" {}
         _Glossiness("Smoothness", Range(0, 1)) = 0.5
         _Metallic("Metallic", Range(0, 1)) = 0.0
         _EdgeLength("Tess. Edge Length", Range(2, 50)) = 15
@@ -44,9 +45,11 @@ Shader "Tachi/Tess" {
 #include "Tessellation.cginc"
 
         sampler2D _MainTex;
+        sampler2D _NormalMap;
 
         struct Input {
             float2 uv_MainTex;
+            float2 uv_NormalMap;
         };
 
         float _EdgeLength;
@@ -317,6 +320,7 @@ Shader "Tachi/Tess" {
             inoutOutput.Metallic = _Metallic;
             inoutOutput.Smoothness = _Glossiness;
             inoutOutput.Alpha = albedo.a;
+            inoutOutput.Normal = UnpackNormal(tex2D(_NormalMap, input.uv_NormalMap));
         }
 
         // A preprocessor hack that allows us to capture individual untessellated vertices in our
