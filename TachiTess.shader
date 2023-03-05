@@ -6,8 +6,8 @@
 // Copyright (c) 2023 Tachi. Licensed under either the Apache 2.0 license or MIT license, at your
 // option.
 //
-// [1]: DJ Walton and DS Meek. "A triangular G1 patch from boundary curves." *Computer-Aided Design*
-// 28, no. 2 (1996): 113-123.
+// [1]: D.J. Walton and D.S. Meek. "A triangular G1 patch from boundary curves." *Computer-Aided
+// Design* 28, no. 2 (1996): 113-123.
 //
 // [2]: https://docs.unity3d.com/Manual/SL-SurfaceShaders.html
 
@@ -19,7 +19,8 @@ Shader "Tachi/Tess" {
         _NormalMap("Normal Map", 2D) = "bump" {}
         _Glossiness("Smoothness", Range(0, 1)) = 0.5
         _Metallic("Metallic", Range(0, 1)) = 0.0
-        _EdgeLength("Tess. Edge Length", Range(2, 50)) = 15
+        _TessFactor("Tess. Factor", Range(50, 100)) = 75
+        _MaxTessLevel("Max Tess. Level", Range(1, 6)) = 6
     }
     // *INDENT-ON*
 
@@ -52,7 +53,8 @@ Shader "Tachi/Tess" {
             float2 uv_NormalMap;
         };
 
-        float _EdgeLength;
+        float _TessFactor;
+        float _MaxTessLevel;
         half _Glossiness;
         half _Metallic;
         fixed4 _Color;
@@ -223,10 +225,14 @@ Shader "Tachi/Tess" {
                           float3 n040,
                           float3 n004,
                           float3 tessCoord) {
-            // These come in unnormalized, so normalize them.
-            n400 = safeNormalize(n400);
-            n040 = safeNormalize(n040);
-            n004 = safeNormalize(n004);
+            // Switch to world space.
+            // FIXME: I'm not sure if this is necessary, but let's be paranoid for now.
+            p400 = mul(unity_ObjectToWorld, p400);
+            p040 = mul(unity_ObjectToWorld, p040);
+            p004 = mul(unity_ObjectToWorld, p004);
+            n400 = safeNormalize(mul(unity_ObjectToWorld, n400));
+            n040 = safeNormalize(mul(unity_ObjectToWorld, n040));
+            n004 = safeNormalize(mul(unity_ObjectToWorld, n004));
 
             // Compute boundary curves.
             float3 p012_3, p021_3, p120_3, p210_3, p201_3, p102_3;
@@ -248,8 +254,6 @@ Shader "Tachi/Tess" {
                                      p031, p301, n040, n400, g11, g12);
             computeFaceControlPoints(p400, p201_3, p102_3, p004, p301, p202, p103,
                                      p310, p013, n400, n004, g21, g22);
-
-            inoutVertex.vertex.w = 1.0;
 
             if (tessCoord.x == 0.0 || tessCoord.y == 0.0 || tessCoord.z == 0.0) {
                 float3 v0, v1, v2, v3;
@@ -273,38 +277,68 @@ Shader "Tachi/Tess" {
                     v3 = p400;
                     t = tessCoord.x;
                 }
-                inoutVertex.vertex.xyz = evalEdgePoint(v0, v1, v2, v3, t);
+                inoutVertex.vertex.xyz = mul(unity_WorldToObject, evalEdgePoint(v0, v1, v2, v3, t));
                 return;
             }
 
             // Evaluate Gregory patch.
-            inoutVertex.vertex.xyz = evalGregoryPatch(p004,
-                                                      p013,
-                                                      p022,
-                                                      p031,
-                                                      p040,
-                                                      p130,
-                                                      p220,
-                                                      p310,
-                                                      p400,
-                                                      p301,
-                                                      p202,
-                                                      p103,
-                                                      g01,
-                                                      g02,
-                                                      g11,
-                                                      g12,
-                                                      g21,
-                                                      g22,
-                                                      tessCoord);
+            inoutVertex.vertex.xyz = mul(unity_WorldToObject, evalGregoryPatch(p004,
+                                                                               p013,
+                                                                               p022,
+                                                                               p031,
+                                                                               p040,
+                                                                               p130,
+                                                                               p220,
+                                                                               p310,
+                                                                               p400,
+                                                                               p301,
+                                                                               p202,
+                                                                               p103,
+                                                                               g01,
+                                                                               g02,
+                                                                               g11,
+                                                                               g12,
+                                                                               g21,
+                                                                               g22,
+                                                                               tessCoord));
         }
 
-        // Other shader code follows.
+
+        float tessEdge(float3 p0, float3 p1, float3 n0, float3 n1, float tessFactor,
+                       float maxTessLevel) {
+            // Be careful of cracks here!
+            float edgeLengthTessLevel =
+                length(p1 - p0) / lerp(-p1.z, -p0.z, 0.5) * tessFactor;
+            float normalTessLevel = 1.0 - max(0.0, min(dot(n0, float3(0.0, 0.0, 1.0)),
+                                                       dot(n1, float3(0.0, 0.0, 1.0))));
+            return min(maxTessLevel, edgeLengthTessLevel * normalTessLevel);
+        }
 
         // Entry point for computation of tessellation factors.
         float4 mainTessControl(appdata_full v0, appdata_full v1, appdata_full v2) {
-            return UnityEdgeLengthBasedTess(v0.vertex, v1.vertex, v2.vertex, _EdgeLength);
+            float3 p0 = mul(UNITY_MATRIX_MV, float4(v0.vertex)).xyz;
+            float3 p1 = mul(UNITY_MATRIX_MV, float4(v1.vertex)).xyz;
+            float3 p2 = mul(UNITY_MATRIX_MV, float4(v2.vertex)).xyz;
+
+            // FIXME: should be inverse transpose!
+            float3 origin = mul(UNITY_MATRIX_MV, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+            float3 n0 =
+                safeNormalize(mul(UNITY_MATRIX_MV, float4(v0.normal, 1.0)).xyz - origin);
+            float3 n1 =
+                safeNormalize(mul(UNITY_MATRIX_MV, float4(v1.normal, 1.0)).xyz - origin);
+            float3 n2 =
+                safeNormalize(mul(UNITY_MATRIX_MV, float4(v2.normal, 1.0)).xyz - origin);
+
+            float4 tessLevel;
+            float tessFactor = _TessFactor;
+            tessLevel.x = tessEdge(p2, p1, n2, n1, _TessFactor, _MaxTessLevel);
+            tessLevel.y = tessEdge(p0, p2, n0, n2, _TessFactor, _MaxTessLevel);
+            tessLevel.z = tessEdge(p1, p0, n1, n0, _TessFactor, _MaxTessLevel);
+            tessLevel.w = (tessLevel.x + tessLevel.y + tessLevel.z) / 3.0;
+            return tessLevel;
         }
+
+        // Other shader code follows.
 
         // This is unused. It's just here to shut up the compiler.
         void fakeVert(inout appdata_full unusedArg) {
@@ -330,6 +364,10 @@ Shader "Tachi/Tess" {
                  vi[0].vertex.xyz, vi[1].vertex.xyz, vi[2].vertex.xyz, \
                  vi[0].normal, vi[1].normal, vi[2].normal, \
                  bary)
+
+        // Fractional odd partitioning looks bad, and surface shaders unfortunately hammer that mode
+        // in. Use a preprocessor hack to switch it to integer mode.
+#define UNITY_partitioning(x) partitioning("integer")
 
         ENDCG
     }
