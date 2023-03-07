@@ -84,5 +84,5 @@ Shader "Tachi/Tess" {
         ENDCG
     }
 
-    FallBack "Diffuse"
+    FallBack "Standard"
 }
