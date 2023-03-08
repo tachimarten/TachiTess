@@ -41,7 +41,7 @@ Shader "Tachi/Tess" {
 // You must include `tessellate:mainTessControl vertex:fakeVert` here for tessellation to work.
 //
 // [2]: https://docs.unity3d.com/Manual/SL-SurfaceShaders.html
-#pragma surface mainSurface Standard fullforwardshadows tessellate:mainTessControl vertex:fakeVert
+#pragma surface mainSurface Standard addshadow fullforwardshadows tessellate:mainTessControl vertex:fakeVert
 
 // Use shader model 4.6 target for tessellation.
 #pragma target 4.6
